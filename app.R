@@ -5,8 +5,10 @@ library(readr)
 library(tidyverse)
 library(plotly)
 library(modelr)
+library(lubridate)
 
 source("functions/combine_measures.R")
+source("functions/elapsed_months.R")
 
 # Define UI for data upload app ----
 ui <- fluidPage(
@@ -38,8 +40,8 @@ ui <- fluidPage(
                          selected = ","),
         
             radioButtons("age_range", "Age range",
-                         choices = c(Weeks13 = "0_13",
-                                     Years5 = "0_5"),
+                         choices = c('Weeks 1 through 13' = "0_13",
+                                     'Years 1 through 5' = "0_5"),
                          selected = "0_5"),
             
             radioButtons("weight_in", "Weight in",
@@ -60,12 +62,14 @@ ui <- fluidPage(
             tabsetPanel(type = "tabs",
                         tabPanel("Data", 
                                  verbatimTextOutput("input_instructions"),
-                                 DT::dataTableOutput("contents")),
+                                 DT::dataTableOutput("contents"),
+                                 uiOutput("example_csv")),
                         tabPanel("Curve", 
                                  plotlyOutput("plot_curve"),
-                                 verbatimTextOutput("correlation")),
+                                 htmlOutput("correlation")),
                         tabPanel("Barchart", 
-                                 plotlyOutput("plot_bar"))
+                                 plotlyOutput("plot_bar"),
+                                 htmlOutput("weight_diff"))
             )
         )
     ),
@@ -79,19 +83,21 @@ ui <- fluidPage(
 # Define server logic to read selected file ----
 server <- function(input, output, session) {
     
+    url <- a("example CSV file with dummy data.", href="https://github.com/ShirinG/who_baby_weight_app/blob/master/data/weight_measures.csv")
+    
+    output$example_csv <- renderUI({
+        tagList("Follow this link to download an", url)
+    })
+    
     output$input_instructions <- renderText({ 
         "Your weight measurements need to have the following format:\n
         - CSV format with comma, semicolon or tab separator\n
         - two columns: column 1 titled date in format '%d.%m.%Y' (e.g. 28.02.2019)\n
-        - column 2 titled weight with measurements in Gramm or Kilogramm
+        - column 2 titled weight with measurements in Gramm or Kilogramm\n
         - the first row has to contain birth date and birth weight"
     })
     
     output$contents <- DT::renderDataTable({
-        
-        # input$file1 will be NULL initially. After the user selects
-        # and uploads a file, head of that data file by default,
-        # or all rows if selected, will be shown.
         
         req(input$file1)
         
@@ -128,7 +134,7 @@ server <- function(input, output, session) {
     weight_measures_all <- reactive({
         weight_measures <- weight_measures()
         
-        # add missing dates
+        # add missing dates for calculating weight change per week of life
         reference_date <- weight_measures$date[[1]]
         end_date <- weight_measures$date[[nrow(weight_measures)]]
         
@@ -137,7 +143,7 @@ server <- function(input, output, session) {
         colnames(all_dates) = "date"
         
         weight_measures_all <- weight_measures %>%
-            right_join(all_dates, by = "date")
+            full_join(all_dates, by = "date")
         
         ## approximate missing values
         weight_measures_all <- weight_measures_all %>%
@@ -151,6 +157,17 @@ server <- function(input, output, session) {
         weight_measures_all <- weight_measures_all %>%
             mutate(diff_day = c(0, diff(weight_approx, lag = 1)),
                    diff_week = c(rep(0, 7), diff(weight_approx, lag = 7)))
+        
+        weight_measures_all <- weight_measures_all %>%
+            mutate(month = elapsed_months(date, reference_date))
+        
+        weight_measures_all <- weight_measures_all %>%
+            mutate(color = ifelse(month <= 2 & diff_week >= 170, "ok",
+                                  ifelse(month == 3 & diff_week >= 110, "ok",
+                                         ifelse(month == 4 & diff_week >= 110, "ok",
+                                                ifelse(month == 5 & diff_week >= 70, "ok",
+                                                       ifelse(month == 6 & diff_week >= 70, "ok",
+                                                              ifelse(month >=7 & diff_week >= 40, "ok", "low")))))))
     })
     
     starting_p <- reactive({
@@ -171,43 +188,55 @@ server <- function(input, output, session) {
     
     output$plot_curve <- renderPlotly({
         
+        gender <- ifelse(input$gender == "boy", "boys", "girls")
+        age <- ifelse(input$age_range == "0_13", "weeks 1 through 13", "years 1 through 5")
+        
         plot_final_curve <- combine_measures_who_final() %>%
             ggplot(aes(date, weight,
                        linetype = ref,
                        color = percentile)) +
             geom_line() +
             geom_point() +
-            xlab("Date") + ylab("Weight in kg") +
-            ggtitle(paste(input$gender, "WHO percentiles")) + 
-            theme_bw()
+            labs(x = "Date",
+                 y = "Weight in kg",
+                 title = paste("WHO child growth standard percentiles shown for", gender, age)) +
+            theme_bw() +
+            theme(legend.position = "bottom")
         
         ggplotly(plot_final_curve)
     })
     
-    output$correlation <- renderText({ 
-        
+    output$correlation <- renderUI({ 
         paste("Your reference percentile is:", starting_p(), 
-              "\nCorrelation between your measurements and your reference percentile is:",
+              "\n. Correlation between your measurements and your reference percentile is:",
               round(cor(test_curves()$weight, test_curves()$weight_approx, use = 'complete.obs'), digits = 5))
     })
     
     output$plot_bar <- renderPlotly({
 
         plot_final_bar <- weight_measures_all() %>%
-            mutate(color = ifelse(week <= 13 & diff_week >=200, "ok",
-                                  ifelse(week > 13 & diff_week >= 110, "ok", "low"))) %>%
+            distinct(week, .keep_all = TRUE) %>%
             ggplot(aes(x = date, y = diff_week, fill = color)) +
             geom_bar(stat = "identity") +
             scale_fill_brewer(palette = "Set1") +
-            xlab("Date") + ylab("Weight difference compared to one week prior to date") +
-            ggtitle("Weekly weight differences") + 
+            labs(x = "Date",
+                 y = "Weight difference in gramm",
+                 title = "Weekly weight differences: Weight at each full week compared to one week prior") +
             theme_bw()
         
         ggplotly(plot_final_bar)
     })
     
+    output$weight_diff <- renderUI({ 
+        url <- a("this German site about breastfeeding", href="https://www.stillkinder.de/gewicht-und-wachstum-von-gestillten-kindern/")
+        tagList("Bar colors show whether the weekly weight gain is above (blue) or below (red) the required minimum for BREASTFED babies given by",
+                url,
+                ". In months 1 and 2, the minimum weight gain should be: 170 g, in months 3 and 4: 110 g, in months 5 and 6: 70 g and from month 7 to 12: 40 g.")
+   })
+    
 }
 # Run the app ----
 shinyApp(ui, server)
 
-# deployApp()
+# deploy
+# rsconnect::deployApp()
