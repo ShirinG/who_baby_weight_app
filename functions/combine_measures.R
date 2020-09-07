@@ -4,16 +4,20 @@ combine_measures_who <- function(weight_measures,
                                  weight_in, # "g" or "kg"
                                  gender) { # "boy" or "girl"
   
+  # if weight in g convert to kg
   if (weight_in == "g") {
     weight_measures <- weight_measures %>%
       mutate(weight = weight / 1000)
   }
   
+  # get first and last date in table
   reference_date <- weight_measures$date[[1]]
   end_date <- weight_measures$date[[nrow(weight_measures)]] + 31
   
+  # get weight at birth for calculating the reference percentile
   reference_weight <- weight_measures$weight[[1]]
   
+  # filter for input age range & sex
   if (age_range == "0_13") {
     if (gender == "boy") {
       who <- p_0_13 %>%
