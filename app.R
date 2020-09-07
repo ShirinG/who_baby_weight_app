@@ -158,6 +158,7 @@ server <- function(input, output, session) {
             mutate(diff_day = c(0, diff(weight_approx, lag = 1)),
                    diff_week = c(rep(0, 7), diff(weight_approx, lag = 7)))
         
+        # calculate number of elapsed months btw dates
         weight_measures_all <- weight_measures_all %>%
             mutate(month = elapsed_months(date, reference_date))
         
@@ -215,14 +216,14 @@ server <- function(input, output, session) {
     output$plot_bar <- renderPlotly({
 
         plot_final_bar <- weight_measures_all() %>%
-            distinct(week, .keep_all = TRUE) %>%
             ggplot(aes(x = date, y = diff_week, fill = color)) +
-            geom_bar(stat = "identity") +
-            scale_fill_brewer(palette = "Set1") +
-            labs(x = "Date",
-                 y = "Weight difference in gramm",
-                 title = "Weekly weight differences: Weight at each full week compared to one week prior") +
-            theme_bw()
+                geom_bar(stat = "identity") +
+                scale_fill_brewer(palette = "Set1") +
+                labs(x = "Date",
+                     y = "Weight difference in gramm",
+                     fill = "Weight gain",
+                     title = "Weekly weight differences: (Approximated) weight for each day compared to weight at 7 days prior") +
+                theme_bw()
         
         ggplotly(plot_final_bar)
     })
@@ -231,7 +232,7 @@ server <- function(input, output, session) {
         url <- a("this German site about breastfeeding", href="https://www.stillkinder.de/gewicht-und-wachstum-von-gestillten-kindern/")
         tagList("Bar colors show whether the weekly weight gain is above (blue) or below (red) the required minimum for BREASTFED babies given by",
                 url,
-                ". In months 1 and 2, the minimum weight gain should be: 170 g, in months 3 and 4: 110 g, in months 5 and 6: 70 g and from month 7 to 12: 40 g.")
+                ". In months 1 and 2, the minimum weight gain should be: 170 g, in months 3 and 4: 110 g, in months 5 and 6: 70 g and from month 7 on: 40 g.")
    })
     
 }
