@@ -171,7 +171,7 @@ server <- function(input, output, session) {
                 month == 5 & diff_week >= 70 ~ "ok",
                 month == 6 & diff_week >= 70 ~ "ok",
                 month >= 7 & diff_week >= 40 ~ "ok",
-                TRUE ~ "low")
+                TRUE ~ "low"))
     })
     
     starting_p <- reactive({
