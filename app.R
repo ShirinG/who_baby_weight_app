@@ -162,13 +162,16 @@ server <- function(input, output, session) {
         weight_measures_all <- weight_measures_all %>%
             mutate(month = elapsed_months(date, reference_date))
         
+        #may I suggest using case_when instead? to me it seems more readable than a bunch of nested ifelse statements!
         weight_measures_all <- weight_measures_all %>%
-            mutate(color = ifelse(month <= 2 & diff_week >= 170, "ok",
-                                  ifelse(month == 3 & diff_week >= 110, "ok",
-                                         ifelse(month == 4 & diff_week >= 110, "ok",
-                                                ifelse(month == 5 & diff_week >= 70, "ok",
-                                                       ifelse(month == 6 & diff_week >= 70, "ok",
-                                                              ifelse(month >=7 & diff_week >= 40, "ok", "low")))))))
+            mutate(color = case_when(
+                month <= 2 & diff_week >= 170 ~ "ok",
+                month == 3 & diff_week >= 110 ~ "ok",
+                month == 4 & diff_week >= 110 ~ "ok",
+                month == 5 & diff_week >= 70 ~ "ok",
+                month == 6 & diff_week >= 70 ~ "ok",
+                month >= 7 & diff_week >= 40 ~ "ok",
+                TRUE ~ "low")
     })
     
     starting_p <- reactive({
