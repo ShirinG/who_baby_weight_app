@@ -145,8 +145,9 @@ server <- function(input, output, session) {
         weight_measures_all <- weight_measures %>%
             full_join(all_dates, by = "date")
         
-        ## approximate missing values
+        ## arrange by date and approximate missing values
         weight_measures_all <- weight_measures_all %>%
+            arrange(date) %>%
             mutate(weight_approx = approx(weight, n = nrow(.))[[2]])
         
         ## add running week number
